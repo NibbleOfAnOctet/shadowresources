@@ -1,3 +1,5 @@
 /target
 /decompressed
 /shadowrun.sfc
+/libs/snes-gfx/target/**
+/libs/snes-gfx/.vscode

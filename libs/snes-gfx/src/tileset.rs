@@ -1,8 +1,7 @@
-use crate::{compression, palette::Format};
-use std::{
-    fs::File,
-    io::{BufReader, Cursor, Read},
-};
+use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
+
+use crate::palette::{Format, Palette};
+use std::io::{BufReader, Cursor, Read};
 
 pub struct Tileset {
     pub tiles: Vec<[u8; 64]>,
@@ -10,12 +9,12 @@ pub struct Tileset {
 }
 
 impl Tileset {
-    pub fn load(rom: &mut File, offset: u32, format: Format) -> Self {
-        let decompressed = compression::decompress(rom, offset);
+    pub fn load(tileset_data: &Vec<u8>, format: Format) -> Self {
+        
         Self {
             tiles: match format {
-                Format::BPP2 => Tileset::create_tileset::<16>(decompressed),
-                Format::BPP4 => Tileset::create_tileset::<32>(decompressed),
+                Format::BPP2 => Tileset::convert_tiles::<16>(tileset_data),
+                Format::BPP4 => Tileset::convert_tiles::<32>(tileset_data),
             },
             format,
         }
@@ -53,9 +52,9 @@ impl Tileset {
         return pixel_indices;
     }
 
-    /// Loops over the raw tiledata with a variable buffer length.
+    /// Converts the bitplane tile data to 8x8 pixel values.
     /// BYTES_PER_TILE: 32 (4BPP) or 16 (2BPP)
-    fn create_tileset<const BYTES_PER_TILE: usize>(tile_data: Vec<u8>) -> Vec<[u8; 64]> {
+    fn convert_tiles<const BYTES_PER_TILE: usize>(tile_data: &Vec<u8>) -> Vec<[u8; 64]> {
         let cursor = Cursor::new(tile_data);
         let mut reader = BufReader::new(cursor);
         let mut tiles: Vec<[u8; 64]> = Vec::new();
@@ -71,5 +70,34 @@ impl Tileset {
             }
         }
         tiles
+    }
+
+    /// Converts the tile pixel data to images using provided palette and palette index.
+    pub fn convert_to_tile_images(&self, palette: &Palette, palette_index:u8) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+        let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
+        for tile in &self.tiles{
+            let tile_image = RgbaImage::from_fn(8, 8, |x, y| {
+                let color_index = tile[(y * 8 + x) as usize];
+                let color = palette.get_rgb_color(palette_index, color_index, self.format);
+                let alpha = if color_index == 0 { 0 } else { 255 };
+
+                Rgba([color[0], color[1], color[2], alpha])
+            });
+            tileset.push(tile_image);
+        }
+        tileset
+    }
+
+    /// Merges a vector of images into a single tileset image
+    pub fn merge_tiles(tiles:&Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>, cols:u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let image_width = cols*8;
+        let image_height = 8*(tiles.len() as u32/cols)+8;
+        let mut tileset_image = RgbaImage::new(image_width, image_height);
+        for (index, image) in tiles.iter().enumerate() {
+            let offset_x = 8 * (index as u32 % cols) as u32;
+            let offset_y = 8 * (index as u32 / cols) as u32;
+            tileset_image.copy_from(image, offset_x, offset_y).unwrap();
+        }
+        tileset_image
     }
 }
