@@ -39,11 +39,8 @@ impl Palette {
         return Self { colors: colors };
     }
 
-    pub fn get_rgb_color(&self, palette_index: u8, color: u8, format: Format) -> [u8; 3] {
-        match format {
-            Format::BPP2 => self.colors[((palette_index * 16) + color) as usize],
-            Format::BPP4 => self.colors[((palette_index * 16) + color) as usize],
-        }
+    pub fn get_rgb_color(&self, palette_index: u8, color: u8) -> [u8; 3] {
+        self.colors[((palette_index * 16) + color) as usize]
     }
     
     pub fn count_palettes(&self)->u8{

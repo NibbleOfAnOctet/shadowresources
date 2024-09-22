@@ -25,7 +25,7 @@ mod tests {
         palettes.append(&mut [0x21, 0x04].repeat(16));
 
         let palette = Palette::load(&palettes);
-        assert_eq!(palette.get_rgb_color(0, 0, palette::Format::BPP4), [255, 255, 255]);
-        assert_eq!(palette.get_rgb_color(1, 0, palette::Format::BPP2), [8, 8, 8]);
+        assert_eq!(palette.get_rgb_color(0, 0), [255, 255, 255]);
+        assert_eq!(palette.get_rgb_color(1, 0), [8, 8, 8]);
     }
 }

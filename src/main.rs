@@ -27,10 +27,10 @@ fn main() {
 
     let palette = Palette::load(&palette_data);
     let tileset1 = Tileset::load(&tileset_data, Format::BPP4);
-    let mut tilemap1 = Tilemap::load(&tilemap_data, &tileset1, &palette, Format::BPP4);
+    let mut tilemap1 = Tilemap::load(&tilemap_data, &tileset1, &palette);
 
     tilemap1.generate_image().save("decompressed/tilemap1.png").unwrap();
 
     let all_tiles = tileset1.convert_to_tile_images(&palette, 1);
-    snes_gfx::tileset::Tileset::merge_tiles(&all_tiles,12).save("decompressed/tileset1.png").unwrap();
+    Tileset::merge_tiles(&all_tiles,12).save("decompressed/tileset1.png").unwrap();
 }

@@ -54,17 +54,15 @@ pub struct Tilemap<'a> {
     palette: &'a Palette,
     tileset: &'a Tileset,
     tiles: Vec<Tile>,
-    format: Format,
 }
 
 impl<'a> Tilemap<'a> {
-    pub fn load(nametable_data:&'a Vec<u8>, tileset: &'a Tileset, palette: &'a Palette, format: Format) -> Self {
+    pub fn load(nametable_data:&'a Vec<u8>, tileset: &'a Tileset, palette: &'a Palette) -> Self {
         Self {
             nametable: nametable_data,
             palette: palette,
             tileset: tileset,
             tiles: Vec::new(),
-            format,
         }
     }
     pub fn generate_tileset(&self)->ImageBuffer<Rgba<u8>,Vec<u8>> {
@@ -79,7 +77,7 @@ impl<'a> Tilemap<'a> {
 
             let mut tile_image = RgbaImage::from_fn(8, 8, |x, y| {
                 let color_index = chr[(y * 8 + x) as usize];
-                let color = self.palette.get_rgb_color(tile.palette_index, color_index, self.format);
+                let color = self.palette.get_rgb_color(tile.palette_index, color_index);
                 let alpha = if color_index == 0 { 0 } else { 255 };
 
                 Rgba([color[0], color[1], color[2], alpha])
@@ -129,7 +127,7 @@ impl<'a> Tilemap<'a> {
 
             let color = self
                 .palette
-                .get_rgb_color(tile.palette_index, color_index as u8, self.format);
+                .get_rgb_color(tile.palette_index, color_index as u8);
 
             let alpha = if color_index == 0 { 0 } else { 255 };
             self.tiles.push(tile);

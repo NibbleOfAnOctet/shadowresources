@@ -78,7 +78,7 @@ impl Tileset {
         for tile in &self.tiles{
             let tile_image = RgbaImage::from_fn(8, 8, |x, y| {
                 let color_index = tile[(y * 8 + x) as usize];
-                let color = palette.get_rgb_color(palette_index, color_index, self.format);
+                let color = palette.get_rgb_color(palette_index, color_index);
                 let alpha = if color_index == 0 { 0 } else { 255 };
 
                 Rgba([color[0], color[1], color[2], alpha])
