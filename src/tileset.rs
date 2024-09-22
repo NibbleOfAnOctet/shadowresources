@@ -1,8 +1,8 @@
+use crate::{compression, palette::Format};
 use std::{
     fs::File,
     io::{BufReader, Cursor, Read},
 };
-use crate::{compression, palette::Format};
 
 pub struct Tileset {
     pub tiles: Vec<[u8; 64]>,
@@ -10,97 +10,66 @@ pub struct Tileset {
 }
 
 impl Tileset {
-    pub fn new(format: Format) -> Self {
+    pub fn load(rom: &mut File, offset: u32, format: Format) -> Self {
+        let decompressed = compression::decompress(rom, offset);
         Self {
-            tiles: Vec::new(),
+            tiles: match format {
+                Format::BPP2 => Tileset::create_tileset::<16>(decompressed),
+                Format::BPP4 => Tileset::create_tileset::<32>(decompressed),
+            },
             format,
         }
     }
 
-    pub fn load(&mut self, rom: &mut File, offset: u32, format: Format) {
-        let decompressed = compression::decompress(rom, offset);
-        self.create_tileset(decompressed, format);
-    }
+    /// Converts the SNES 8x8 planar format to an array of u8 values containing the pixel data. (Indexed color)
+    fn bitplanes_to_tile<const BYTES_PER_TILE: usize>(tile_data: &[u8]) -> [u8; 64] {
+        // Final 8x8 pixel values
+        let mut pixel_indices = [0u8; 64];
 
-    fn bitplanes_to_tile(&mut self, tile_data: &[u8], format: Format) -> [u8; 64] {
-        match format {
-            Format::BPP4 => {
-                let mut pixel_indices = [0u8; 64];
-                for row in 0..8 {
-                    // Fetch the bytes for the current row
-                    let b0 = tile_data[row * 2]; // Bitplane 0
-                    let b1 = tile_data[row * 2 + 1]; // Bitplane 1
-                    let b2 = tile_data[16 + row * 2]; // Bitplane 2
-                    let b3 = tile_data[16 + row * 2 + 1]; // Bitplane 3
+        // Fetch the bitplanes for the current row of pixels
+        for row in 0..8 {
+            //Get bitplane bytes. Starting with BP1 and BP2 interleaved, followed by BP3 and BP4 if its a 4BPP tile.
+            let b0 = tile_data[row * 2];
+            let b1 = tile_data[row * 2 + 1];
 
-                    for col in 0..8 {
-                        let shift = 7 - col; // Shift to align the bits
-                        let bit0 = (b0 >> shift) & 1;
-                        let bit1 = (b1 >> shift) & 1;
-                        let bit2 = (b2 >> shift) & 1;
-                        let bit3 = (b3 >> shift) & 1;
+            let (b2, b3) = match BYTES_PER_TILE {
+                32 => (tile_data[16 + row * 2], tile_data[16 + row * 2 + 1]),
+                16 => (0, 0),
+                _ => panic!("Invalid number of bytes per tile."),
+            };
 
-                        // Combine bits to form the pixel value
-                        let pixel_value = (bit3 << 3) | (bit2 << 2) | (bit1 << 1) | bit0;
+            for col in 0..8 {
+                let shift = 7 - col; // Shift to align the bits
+                let bit0 = (b0 >> shift) & 1;
+                let bit1 = (b1 >> shift) & 1;
+                let bit2 = (b2 >> shift) & 1;
+                let bit3 = (b3 >> shift) & 1;
 
-                        pixel_indices[row * 8 + col] = pixel_value;
-                    }
-                }
-                return pixel_indices;
-            }
-            Format::BPP2 => {
-                let mut pixel_indices = [0u8; 64];
-                for row in 0..8 {
-                    // Fetch the bytes for the current row
-                    let b0 = tile_data[row * 2]; // Bitplane 0
-                    let b1 = tile_data[(row * 2) + 1]; // Bitplane 1
+                let pixel_value = (bit3 << 3) | (bit2 << 2) | (bit1 << 1) | bit0;
 
-                    for col in 0..8 {
-                        let shift = 7 - col; // Shift to align the bits
-                        let bit0 = (b0 >> shift) & 1;
-                        let bit1 = (b1 >> shift) & 1;
-
-                        // Combine bits to form the pixel value
-                        let pixel_value = (bit1 << 1) | bit0;
-
-                        pixel_indices[row * 8 + col] = pixel_value;
-                    }
-                }
-
-                return pixel_indices;
+                pixel_indices[row * 8 + col] = pixel_value;
             }
         }
+        return pixel_indices;
     }
 
-    fn create_tileset(&mut self, tile_data: Vec<u8>, format: Format) {
+    /// Loops over the raw tiledata with a variable buffer length.
+    /// BYTES_PER_TILE: 32 (4BPP) or 16 (2BPP)
+    fn create_tileset<const BYTES_PER_TILE: usize>(tile_data: Vec<u8>) -> Vec<[u8; 64]> {
         let cursor = Cursor::new(tile_data);
         let mut reader = BufReader::new(cursor);
-
+        let mut tiles: Vec<[u8; 64]> = Vec::new();
         loop {
-            match format {
-                Format::BPP4 => {
-                    let mut buf: [u8; 32] = [0; 32];
-                    match reader.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(_) => {
-                            let tile = self.bitplanes_to_tile(&buf, format);
-                            self.tiles.push(tile);
-                        }
-                        Err(e) => panic!("{}", e),
-                    }
-                },
-                Format::BPP2=>{
-                    let mut buf: [u8; 16] = [0; 16];
-                    match reader.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(_) => {
-                            let tile = self.bitplanes_to_tile(&buf, format);
-                            self.tiles.push(tile);
-                        }
-                        Err(e) => panic!("{}", e),
-                    }
+            let mut buf: [u8; BYTES_PER_TILE] = [0; BYTES_PER_TILE];
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(_) => {
+                    let tile = Tileset::bitplanes_to_tile::<BYTES_PER_TILE>(&buf);
+                    tiles.push(tile);
                 }
+                Err(e) => panic!("{}", e),
             }
         }
+        tiles
     }
 }

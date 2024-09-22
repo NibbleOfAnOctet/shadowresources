@@ -1,0 +1,4 @@
+max_width = 120
+fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"
+newline_style = "Unix"

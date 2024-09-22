@@ -16,44 +16,36 @@ pub struct Tile {
     tile_index: u16,
 }
 
-pub struct Tilemap {
+pub struct Tilemap<'a> {
     nametable: Vec<u8>,
-    palette: Palette,
-    tileset: Box<Tileset>,
+    palette: &'a Palette,
+    tileset: &'a Tileset,
     tiles: Vec<Tile>,
     format: Format,
 }
 
-impl Tilemap {
-    pub fn load(
-        rom: &mut File,
-        offset: u32,
-        tileset: Tileset,
-        palette: Palette,
-        format: Format,
-    ) -> Self {
+impl<'a> Tilemap<'a> {
+    pub fn load(rom: &mut File, offset: u32, tileset: &'a Tileset, palette: &'a Palette, format: Format) -> Self {
         Self {
             nametable: compression::decompress(rom, offset),
-            palette,
-            tileset: Box::new(tileset),
+            palette: palette,
+            tileset: tileset,
             tiles: Vec::new(),
             format,
         }
     }
 
     pub fn generate_image(&mut self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-
         image::RgbaImage::from_fn(256, 256, |x, y| {
             let tilex = x / 8;
             let tiley = y / 8;
             let nametable_index = 2 * (tiley * 32 + tilex) as usize;
 
-            if nametable_index>=(self.nametable.len()-1){
-                return Rgba([0,0,0,0]);
+            if nametable_index >= (self.nametable.len() - 1) {
+                return Rgba([0, 0, 0, 0]);
             }
 
-            let tileword = (self.nametable[nametable_index + 1] as u16) << 8
-                | (self.nametable[nametable_index] as u16);
+            let tileword = (self.nametable[nametable_index + 1] as u16) << 8 | (self.nametable[nametable_index] as u16);
 
             let tile = Tile {
                 tile_index: (tileword & 0x3ff),
@@ -64,7 +56,7 @@ impl Tilemap {
             };
 
             let pixel_index = (y % 8) * 8 + (x % 8);
-            
+
             let color_index = self.tileset.tiles[tile.tile_index as usize][pixel_index as usize] as u16;
 
             let color = self
