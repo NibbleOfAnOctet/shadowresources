@@ -16,11 +16,15 @@ pub struct Palette {
 impl Palette {
     /// SNES colors are 15bit RGB values. 0b0RRRRRBBBBBGGGGG
     fn rgb15_to_rgb24(color: u16) -> [u8; 3] {
-        let r = 8 * (color & 0x1f) as u8;
-        let b = 8 * ((color & 0x7c00) >> 10) as u8;
-        let g = 8 * ((color & 0x3e0) >> 5) as u8;
+        let r = 8 * (color & 0x1f) as u16;
+        let b = 8 * ((color & 0x7c00) >> 10) as u16;
+        let g = 8 * ((color & 0x3e0) >> 5) as u16;
 
-        [r, g, b]
+        let r=r+r/32;
+        let g=g+g/32;
+        let b=b+b/32;
+        
+        [r as u8, g as u8, b as u8]
     }
 
     pub fn load(palette_data: &Vec<u8>) -> Self {
@@ -37,15 +41,12 @@ impl Palette {
 
     pub fn get_rgb_color(&self, palette_index: u8, color: u8, format: Format) -> [u8; 3] {
         match format {
-            Format::BPP2 => self.colors[((palette_index * 4) + color) as usize],
+            Format::BPP2 => self.colors[((palette_index * 16) + color) as usize],
             Format::BPP4 => self.colors[((palette_index * 16) + color) as usize],
         }
     }
     
-    pub fn count_palettes(&self, format:Format)->u8{
-        match format {
-            Format::BPP2 => (self.colors.len()/4).try_into().unwrap(),
-            Format::BPP4 => (self.colors.len()/16).try_into().unwrap(),
-        }
+    pub fn count_palettes(&self)->u8{
+        (self.colors.len()/16).try_into().unwrap()
     }
 }

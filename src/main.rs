@@ -33,5 +33,4 @@ fn main() {
 
     let all_tiles = tileset1.convert_to_tile_images(&palette, 1);
     snes_gfx::tileset::Tileset::merge_tiles(&all_tiles,12).save("decompressed/tileset1.png").unwrap();
-    
 }
