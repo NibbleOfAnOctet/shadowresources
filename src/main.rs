@@ -1,15 +1,12 @@
 #![allow(dead_code)]
 
 mod compression;
-
 mod tiled_map;
 
 use std::{fs::File, io::Seek};
 use snes_gfx::{palette::{Format, Palette}, tilemap::Tilemap, tileset::Tileset};
 
 use byteorder::ReadBytesExt;
-
-
 
 fn read_bytes(rom: &mut File, offset:u32, num_bytes:u32) -> Vec<u8> {
     rom.seek(std::io::SeekFrom::Start(offset.into())).unwrap();

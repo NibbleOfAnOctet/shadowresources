@@ -41,7 +41,7 @@ impl TiledMap {
             height: 32,
             tileheight,
             tilewidth,
-            orientation: "Orthogonal".to_string(),
+            orientation: "orthogonal".to_string(),
             nextobjectid: 0,
             layers: Vec::new(),
             properties: Vec::new(),
