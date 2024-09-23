@@ -5,7 +5,7 @@ use image::{
 use std::hash::{Hash, Hasher};
 
 use crate::{
-    palette::{Format, Palette},
+    palette::Palette,
     tileset::Tileset,
 };
 
@@ -51,13 +51,13 @@ impl Eq for Tile {}
 
 pub struct Tilemap<'a> {
     nametable: &'a Vec<u8>,
-    palette: &'a Palette,
-    tileset: &'a Tileset,
+    palette: &'a dyn Palette,
+    tileset: &'a dyn Tileset,
     tiles: Vec<Tile>,
 }
 
 impl<'a> Tilemap<'a> {
-    pub fn load(nametable_data:&'a Vec<u8>, tileset: &'a Tileset, palette: &'a Palette) -> Self {
+    pub fn load(nametable_data:&'a Vec<u8>, tileset: &'a dyn Tileset, palette: &'a dyn Palette) -> Self {
         Self {
             nametable: nametable_data,
             palette: palette,
@@ -65,15 +65,16 @@ impl<'a> Tilemap<'a> {
             tiles: Vec::new(),
         }
     }
+    
     pub fn generate_tileset(&self)->ImageBuffer<Rgba<u8>,Vec<u8>> {
         let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
-
+        let pixel_data = self.tileset.get_pixel_data();
         for nametable_index in 0..&self.nametable.len() / 2 {
             let tileword =
                 (self.nametable[2 * nametable_index + 1] as u16) << 8 | (self.nametable[2 * nametable_index] as u16);
 
             let tile = Tile::from_nametable_entry(tileword);
-            let chr = self.tileset.tiles[tile.tile_index as usize];
+            let chr = pixel_data[tile.tile_index as usize];
 
             let mut tile_image = RgbaImage::from_fn(8, 8, |x, y| {
                 let color_index = chr[(y * 8 + x) as usize];
@@ -102,6 +103,7 @@ impl<'a> Tilemap<'a> {
     }
 
     pub fn generate_image(&mut self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let tiles = self.tileset.get_pixel_data();
         image::RgbaImage::from_fn(256, 256, |x, y| {
             let tilex = x / 8;
             let tiley = y / 8;
@@ -123,7 +125,7 @@ impl<'a> Tilemap<'a> {
 
             let pixel_index = (y % 8) * 8 + (x % 8);
 
-            let color_index = self.tileset.tiles[tile.tile_index as usize][pixel_index as usize] as u16;
+            let color_index = tiles[tile.tile_index as usize][pixel_index as usize] as u16;
 
             let color = self
                 .palette

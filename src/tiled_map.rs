@@ -32,15 +32,15 @@ pub struct TiledMap {
 }
 
 impl TiledMap {
-    pub fn new(width: u32, height: u32, tileheight: u32, tilewidth: u32) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
         Self {
             tiledversion: "1.11".to_string(),
             file_type: "map".to_string(),
             data: Vec::new(),
-            width: 32,
-            height: 32,
-            tileheight,
-            tilewidth,
+            width,
+            height,
+            tilewidth:8,
+            tileheight:8,
             orientation: "orthogonal".to_string(),
             nextobjectid: 0,
             layers: Vec::new(),

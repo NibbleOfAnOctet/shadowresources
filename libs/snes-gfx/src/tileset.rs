@@ -1,25 +1,65 @@
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 
-use crate::palette::{Format, Palette};
+use crate::palette::{DefaultPalette, Format, Palette};
 use std::io::{BufReader, Cursor, Read};
 
-pub struct Tileset {
-    pub tiles: Vec<[u8; 64]>,
-    pub format: Format,
+pub struct DefaultTileset {
+    tiles: Vec<[u8; 64]>,
+    format: Format,
 }
 
-impl Tileset {
+pub trait Tileset {
+    fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
+    fn convert_to_tile_images(
+        &self, palette: &DefaultPalette, palette_index: u8,
+    ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>;
+}
+
+impl Tileset for DefaultTileset {
+    fn convert_to_tile_images(
+        &self, palette: &DefaultPalette, palette_index: u8,
+    ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+        let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
+        for tile in &self.tiles {
+            let tile_image = RgbaImage::from_fn(8, 8, |x, y| {
+                let color_index = tile[(y * 8 + x) as usize];
+                let color = palette.get_rgb_color(palette_index, color_index);
+                let alpha = if color_index == 0 { 0 } else { 255 };
+
+                Rgba([color[0], color[1], color[2], alpha])
+            });
+            tileset.push(tile_image);
+        }
+        tileset
+    }
+
+    fn get_pixel_data(&self) -> &Vec<[u8; 64]> {
+        &self.tiles
+    }
+}
+
+impl DefaultTileset {
     pub fn load(tileset_data: &Vec<u8>, format: Format) -> Self {
-        
         Self {
             tiles: match format {
-                Format::BPP2 => Tileset::convert_tiles::<16>(tileset_data),
-                Format::BPP4 => Tileset::convert_tiles::<32>(tileset_data),
+                Format::BPP2 => DefaultTileset::convert_tiles::<16>(tileset_data),
+                Format::BPP4 => DefaultTileset::convert_tiles::<32>(tileset_data),
             },
             format,
         }
     }
-
+    /// Merges a vector of images into a single tileset image
+    pub fn merge_tiles(tiles: &Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>, cols: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let image_width = cols * 8;
+        let image_height = 8 * (tiles.len() as u32 / cols) + 8;
+        let mut tileset_image = RgbaImage::new(image_width, image_height);
+        for (index, image) in tiles.iter().enumerate() {
+            let offset_x = 8 * (index as u32 % cols) as u32;
+            let offset_y = 8 * (index as u32 / cols) as u32;
+            tileset_image.copy_from(image, offset_x, offset_y).unwrap();
+        }
+        tileset_image
+    }
     /// Converts the SNES 8x8 planar format to an array of u8 values containing the pixel data. (Indexed color)
     fn bitplanes_to_tile<const BYTES_PER_TILE: usize>(tile_data: &[u8]) -> [u8; 64] {
         // Final 8x8 pixel values
@@ -63,7 +103,7 @@ impl Tileset {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(_) => {
-                    let tile = Tileset::bitplanes_to_tile::<BYTES_PER_TILE>(&buf);
+                    let tile = DefaultTileset::bitplanes_to_tile::<BYTES_PER_TILE>(&buf);
                     tiles.push(tile);
                 }
                 Err(e) => panic!("{}", e),
@@ -71,33 +111,44 @@ impl Tileset {
         }
         tiles
     }
+}
 
-    /// Converts the tile pixel data to images using provided palette and palette index.
-    pub fn convert_to_tile_images(&self, palette: &Palette, palette_index:u8) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> {
-        let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
-        for tile in &self.tiles{
-            let tile_image = RgbaImage::from_fn(8, 8, |x, y| {
-                let color_index = tile[(y * 8 + x) as usize];
-                let color = palette.get_rgb_color(palette_index, color_index);
-                let alpha = if color_index == 0 { 0 } else { 255 };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-                Rgba([color[0], color[1], color[2], alpha])
-            });
-            tileset.push(tile_image);
-        }
-        tileset
+    #[test]
+    fn tileset_generates_correct_pixel_data_for_bpp2() {
+        let tileset_data: Vec<u8> = vec![
+            0x00, 0x00, 0x24, 0x00, 0x24, 0x00, 0x00, 0x00, 0x42, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let expected = vec![[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ] as [u8; 64]];
+
+        let tileset = DefaultTileset::load(&tileset_data, Format::BPP2);
+        assert_eq!(tileset.get_pixel_data(), &expected);
     }
 
-    /// Merges a vector of images into a single tileset image
-    pub fn merge_tiles(tiles:&Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>, cols:u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-        let image_width = cols*8;
-        let image_height = 8*(tiles.len() as u32/cols)+8;
-        let mut tileset_image = RgbaImage::new(image_width, image_height);
-        for (index, image) in tiles.iter().enumerate() {
-            let offset_x = 8 * (index as u32 % cols) as u32;
-            let offset_y = 8 * (index as u32 / cols) as u32;
-            tileset_image.copy_from(image, offset_x, offset_y).unwrap();
-        }
-        tileset_image
+    #[test]
+    fn tileset_generates_correct_pixel_data_for_bpp4() {
+        let tileset_data: Vec<u8> = vec![
+            0x00, 0x00, 0x24, 0x00, 0x24, 0x00, 0x00, 0x00, 0x42, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let expected = vec![[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ] as [u8; 64]];
+
+        let tileset = DefaultTileset::load(&tileset_data, Format::BPP4);
+        assert_eq!(tileset.get_pixel_data(), &expected);
     }
 }
