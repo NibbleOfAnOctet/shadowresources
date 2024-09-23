@@ -57,9 +57,17 @@ impl Palette for DefaultPalette{
     }
 }
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub mod tests {
+    use mockall::mock;
 
+    use super::*;
+    mock!{
+        pub Palette {}
+        impl Palette for Palette{
+            fn get_rgb_color(&self, palette_index: u8, color: u8)->[u8;3];
+            fn count_palettes(&self)->u8;
+        }
+    }
     #[test]
     fn palette_returns_correct_number_of_palettes() {
         let palette = DefaultPalette::load(&[0xff, 0x7f].repeat(16));

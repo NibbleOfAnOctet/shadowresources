@@ -1,13 +1,12 @@
+use std::io::Cursor;
+
+use byteorder::{LittleEndian, ReadBytesExt};
 use image::{
     imageops::{flip_horizontal, flip_vertical},
-    GenericImage, ImageBuffer, Rgba, RgbaImage,
+    GenericImage, ImageBuffer, Rgba,
 };
-use std::hash::{Hash, Hasher};
 
-use crate::{
-    palette::Palette,
-    tileset::Tileset,
-};
+use crate::{palette::Palette, tileset::Tileset};
 
 pub struct Tile {
     flip_h: bool,
@@ -29,112 +28,112 @@ impl Tile {
     }
 }
 
-impl Hash for Tile {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.flip_h.hash(state);
-        self.flip_v.hash(state);
-        self.palette_index.hash(state);
-        self.tile_index.hash(state);
-    }
-}
-
-impl PartialEq for Tile {
-    fn eq(&self, other: &Self) -> bool {
-        self.flip_h == other.flip_h
-            && self.flip_v == other.flip_v
-            && self.palette_index == other.palette_index
-            && self.tile_index == other.tile_index
-    }
-}
-
-impl Eq for Tile {}
-
 pub struct Tilemap<'a> {
-    nametable: &'a Vec<u8>,
     palette: &'a dyn Palette,
     tileset: &'a dyn Tileset,
     tiles: Vec<Tile>,
 }
 
 impl<'a> Tilemap<'a> {
-    pub fn load(nametable_data:&'a Vec<u8>, tileset: &'a dyn Tileset, palette: &'a dyn Palette) -> Self {
+    pub fn load(nametable_data: &'a Vec<u8>, tileset: &'a dyn Tileset, palette: &'a dyn Palette) -> Self {
         Self {
-            nametable: nametable_data,
             palette: palette,
             tileset: tileset,
-            tiles: Vec::new(),
+            tiles: Tilemap::parse_nametable(nametable_data),
         }
     }
-    
-    pub fn generate_tileset(&self)->ImageBuffer<Rgba<u8>,Vec<u8>> {
-        let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
-        let pixel_data = self.tileset.get_pixel_data();
-        for nametable_index in 0..&self.nametable.len() / 2 {
-            let tileword =
-                (self.nametable[2 * nametable_index + 1] as u16) << 8 | (self.nametable[2 * nametable_index] as u16);
 
-            let tile = Tile::from_nametable_entry(tileword);
-            let chr = pixel_data[tile.tile_index as usize];
+    fn parse_nametable(nametable_data: &'a Vec<u8>) -> Vec<Tile> {
+        let mut tiles = Vec::<Tile>::new();
+        let mut cursor = Cursor::new(nametable_data);
+        loop {
+            match cursor.read_u16::<LittleEndian>() {
+                Ok(entry) => tiles.push(Tile::from_nametable_entry(entry)),
+                Err(_) => break,
+            }
+        }
+        tiles
+    }
 
-            let mut tile_image = RgbaImage::from_fn(8, 8, |x, y| {
-                let color_index = chr[(y * 8 + x) as usize];
-                let color = self.palette.get_rgb_color(tile.palette_index, color_index);
-                let alpha = if color_index == 0 { 0 } else { 255 };
+    pub fn generate_image(&mut self, tiles_wide: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let image_width = 8 * tiles_wide;
+        let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;
+        let mut target_image = image::RgbaImage::new(image_width, image_height);
 
-                Rgba([color[0], color[1], color[2], alpha])
-            });
+        for (index, tile) in self.tiles.iter().enumerate() {
+            let mut tile_image = self
+                .tileset
+                .get_tile_image(tile.tile_index, tile.palette_index, self.palette);
+
             if tile.flip_h {
                 tile_image = flip_horizontal(&tile_image);
             }
             if tile.flip_v {
                 tile_image = flip_vertical(&tile_image);
             }
-            if !tileset.iter().any(|entry| entry.eq(&tile_image)) {
-                tileset.push(tile_image);
-            }
+
+            let x_offset = 8 * (index as u32 % tiles_wide);
+            let y_offset = 8 * (index as u32 / tiles_wide);
+
+            target_image
+                .copy_from(&tile_image, x_offset, y_offset)
+                .expect("Could not copy tile to target image.");
         }
-        let mut tileset_image = RgbaImage::new(128, (tileset.len() as u32 / 2) + 8);
-        for (index, image) in tileset.iter().enumerate() {
-            let offset_x = 8 * (index % 16) as u32;
-            let offset_y = 8 * (index / 16) as u32;
-            tileset_image.copy_from(image, offset_x, offset_y).unwrap();
-        }
-        tileset_image
+
+        target_image
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::{palette::tests::MockPalette, tileset::tests::MockTileset};
+
+    use super::*;
+    
+    #[test]
+    fn tilemap_returns_correct_tile_index() {
+        let tileset = MockTileset::new();
+        let palette = MockPalette::new();
+        let nametable_data:Vec<u8> = vec!(0x01,0x00,0x02,0x00,0x03,0x00);
+        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
+        assert_eq!(tilemap.tiles[0].tile_index,0x01);
+        assert_eq!(tilemap.tiles[1].tile_index,0x02);
+        assert_eq!(tilemap.tiles[2].tile_index,0x03);
     }
 
-    pub fn generate_image(&mut self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-        let tiles = self.tileset.get_pixel_data();
-        image::RgbaImage::from_fn(256, 256, |x, y| {
-            let tilex = x / 8;
-            let tiley = y / 8;
-            let nametable_index = 2 * (tiley * 32 + tilex) as usize;
+    #[test]
+    fn tilemap_returns_correct_tile_palette_index() {
+        let tileset = MockTileset::new();
+        let palette = MockPalette::new();
+        let nametable_data:Vec<u8> = vec!(0x00,0x1C);
+        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
+        assert_eq!(tilemap.tiles[0].palette_index,7);
+    }
 
-            if nametable_index >= (self.nametable.len() - 1) {
-                return Rgba([0, 0, 0, 0]);
-            }
+    #[test]
+    fn tilemap_returns_correct_tile_priority() {
+        let tileset = MockTileset::new();
+        let palette = MockPalette::new();
+        let nametable_data:Vec<u8> = vec!(0x00,0x20);
+        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
+        assert_eq!(tilemap.tiles[0].priority,true);
+    }
 
-            let tileword = (self.nametable[nametable_index + 1] as u16) << 8 | (self.nametable[nametable_index] as u16);
+    #[test]
+    fn tilemap_returns_correct_tile_flip_v() {
+        let tileset = MockTileset::new();
+        let palette = MockPalette::new();
+        let nametable_data:Vec<u8> = vec!(0x00,0x80);
+        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
+        assert_eq!(tilemap.tiles[0].flip_v,true);
+    }
 
-            let tile = Tile {
-                tile_index: (tileword & 0x3ff),
-                palette_index: ((tileword & 0x1c00) >> 10) as u8,
-                priority: (tileword & 0x2000) >> 13 == 1,
-                flip_h: (tileword & 0x4000) >> 14 == 1,
-                flip_v: (tileword & 0x8000) >> 15 == 1,
-            };
-
-            let pixel_index = (y % 8) * 8 + (x % 8);
-
-            let color_index = tiles[tile.tile_index as usize][pixel_index as usize] as u16;
-
-            let color = self
-                .palette
-                .get_rgb_color(tile.palette_index, color_index as u8);
-
-            let alpha = if color_index == 0 { 0 } else { 255 };
-            self.tiles.push(tile);
-
-            Rgba([color[0], color[1], color[2], alpha])
-        })
+    #[test]
+    fn tilemap_returns_correct_tile_flip_h() {
+        let tileset = MockTileset::new();
+        let palette = MockPalette::new();
+        let nametable_data:Vec<u8> = vec!(0x00,0x40);
+        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
+        assert_eq!(tilemap.tiles[0].flip_h,true);
     }
 }

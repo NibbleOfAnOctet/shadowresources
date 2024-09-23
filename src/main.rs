@@ -33,21 +33,17 @@ fn extract_splash(
     let palette_data = read_bytes(rom, palette_offset, palette_length);
     let tileset_data = compression::decompress(rom, tiles_offset);
     let tilemap_data = compression::decompress(rom, map_offset);
-    fs::write(format!("decompressed/tiles{prefix}.nes"), &tileset_data).unwrap();
+
     let palette = DefaultPalette::load(&palette_data);
     let tileset = DefaultTileset::load(&tileset_data, format);
     let mut tilemap = Tilemap::load(&tilemap_data, &tileset, &palette);
 
-    let base_dir = format!("decompressed/{}/",prefix);
+    let base_dir = format!("decompressed/{prefix}");
     fs::create_dir(&base_dir).unwrap_or_default();
-    tilemap
-        .generate_image()
-        .save(format!("{}_tilemap.png", &base_dir))
-        .unwrap();
 
     tilemap
-        .generate_tileset()
-        .save(format!("{}optimized_tileset.png", &base_dir))
+        .generate_image(32)
+        .save(format!("{}tilemap.png", &base_dir))
         .unwrap();
 
     let all_tiles = tileset.convert_to_tile_images(&palette, palette_index);
@@ -57,26 +53,32 @@ fn extract_splash(
 }
 
 #[derive(Deserialize)]
-struct layer {
+enum TileFormat {
+    BPP2,
+    BPP4,
+}
+
+#[derive(Deserialize)]
+struct Layer {
     map_offset: u32,
     tile_data: u32,
-    bpp: u8,
+    bpp: TileFormat,
     palette_index: u8,
 }
 #[derive(Deserialize)]
-struct splash_data {
-    layers: Vec<layer>,
+struct SplashData {
+    layers: Vec<Layer>,
     palette_offset: u32,
     num_colors: u32,
 }
 
 fn main() {
     let mut rom = File::open("shadowrun.sfc").expect("Could not open ROM-file!");
-    let splash_data: splash_data =
+    let splash_data: SplashData =
         serde_json::from_str(fs::read_to_string("decompressed/splash1.json").unwrap().as_str()).unwrap();
     for (index, layer) in splash_data.layers.iter().enumerate() {
         extract_splash(
-            &format!("splash{}", index),
+            &format!("splash1/layer{}/", index),
             &mut rom,
             splash_data.palette_offset,
             splash_data.num_colors * 2,
@@ -84,11 +86,9 @@ fn main() {
             layer.map_offset,
             layer.tile_data,
             match layer.bpp {
-                4=>Format::BPP4,
-                2=>Format::BPP2,
-                _=>panic!("Invalid BPP")
-            }
+                TileFormat::BPP2 => Format::BPP2,
+                TileFormat::BPP4 => Format::BPP4,
+            },
         );
     }
-
 }

@@ -7,5 +7,5 @@ edition = "2021"
 byteorder="1.5.0"
 image ="0.25.2"
 
-[dev.dependencies]
+[dev-dependencies]
 mockall = "0.13.0"
