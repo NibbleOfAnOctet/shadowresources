@@ -1,7 +1,9 @@
-# A tool for extracting graphics and tilemaps from SNES games.
-The tool can handle 2BPP and 4BPP tile data. It can also use the data to reconstruct a tilemap from nametable data. The crate is under construction and stuff will break between versions.
+# SNES-GFX
 
-## Example
+## A tool for extracting graphics and tilemaps from SNES games.
+The tool uses data in the original LittleEndian SNES formats. The tool can handle 2BPP and 4BPP tile data. It can also use the tile data together with palette data to reconstruct a tilemap image. The crate is under construction and stuff will definitely break between versions.
+
+## Usage example
 `
 let palette = PaletteRGB24::load(&palette_data);
 let tileset = DefaultTileset::load(&tileset_data, format);
