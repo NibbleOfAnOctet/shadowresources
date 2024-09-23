@@ -9,12 +9,12 @@ pub enum Format {
 }
 
 #[derive(Clone)]
-pub struct DefaultPalette {
+pub struct PaletteRGB24 {
     colors: Vec<[u8; 3]>,
 }
 
-impl DefaultPalette {
-    /// SNES colors are 15bit RGB values. 0b0RRRRRBBBBBGGGGG
+/// A palette implementing conversion between RGB15 and RGB24
+impl PaletteRGB24 {
     fn rgb15_to_rgb24(color: u16) -> [u8; 3] {
         let r = 8 * (color & 0x1f) as u16;
         let b = 8 * ((color & 0x7c00) >> 10) as u16;
@@ -27,12 +27,13 @@ impl DefaultPalette {
         [r as u8, g as u8, b as u8]
     }
 
+    /// Loads palette data from a &`Vec<u8>`. The data is LittleEndian and can be used as is from a rom.
     pub fn load(palette_data: &Vec<u8>) -> Self {
         let mut colors: Vec<[u8; 3]> = Vec::new();
         let mut cursor = Cursor::new(&palette_data);
         loop {
             match cursor.read_u16::<LittleEndian>(){
-                Ok(word) => colors.push(DefaultPalette::rgb15_to_rgb24(word)),
+                Ok(word) => colors.push(PaletteRGB24::rgb15_to_rgb24(word)),
                 Err(_) => break,
             }
         }
@@ -47,7 +48,7 @@ pub trait Palette{
     fn count_palettes(&self)->u8;
 }
 
-impl Palette for DefaultPalette{
+impl Palette for PaletteRGB24{
     fn get_rgb_color(&self, palette_index: u8, color: u8) -> [u8; 3] {
         self.colors[((palette_index * 16) + color) as usize]
     }
@@ -56,6 +57,7 @@ impl Palette for DefaultPalette{
         (self.colors.len()/16).try_into().unwrap()
     }
 }
+
 #[cfg(test)]
 pub mod tests {
     use mockall::mock;
@@ -70,10 +72,10 @@ pub mod tests {
     }
     #[test]
     fn palette_returns_correct_number_of_palettes() {
-        let palette = DefaultPalette::load(&[0xff, 0x7f].repeat(16));
+        let palette = PaletteRGB24::load(&[0xff, 0x7f].repeat(16));
         assert_eq!(palette.count_palettes(), 1);
 
-        let palette = DefaultPalette::load(&[0xff, 0x7f].repeat(32));
+        let palette = PaletteRGB24::load(&[0xff, 0x7f].repeat(32));
         assert_eq!(palette.count_palettes(), 2);
     }
 
@@ -82,7 +84,7 @@ pub mod tests {
         let mut palettes = [0xff, 0x7f].repeat(16);
         palettes.append(&mut [0x21, 0x04].repeat(16));
 
-        let palette = DefaultPalette::load(&palettes);
+        let palette = PaletteRGB24::load(&palettes);
         assert_eq!(palette.get_rgb_color(0, 0), [255, 255, 255]);
         assert_eq!(palette.get_rgb_color(1, 0), [8, 8, 8]);
     }

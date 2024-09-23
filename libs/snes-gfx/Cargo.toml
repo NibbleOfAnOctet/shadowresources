@@ -1,7 +1,12 @@
 [package]
 name = "snes-gfx"
+description = "A library for extracting SNES-graphics data and nametables."
 version = "0.1.0"
-edition = "2021"
+edition="2021"
+license = "MIT"
+keywords = ["snes", "graphics", "tile", "tilemap"]
+authors = ["Simon <h.simon.lindell@gmail.com>"]
+repository = "https://github.com/NibbleOfAnOctet/shadowresources/tree/main/libs/snes-gfx"
 
 [dependencies]
 byteorder="1.5.0"

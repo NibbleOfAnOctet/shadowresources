@@ -1,6 +1,6 @@
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 
-use crate::palette::{DefaultPalette, Format, Palette};
+use crate::palette::{PaletteRGB24, Format, Palette};
 use std::io::{BufReader, Cursor, Read};
 
 pub struct DefaultTileset {
@@ -10,34 +10,30 @@ pub struct DefaultTileset {
 
 pub trait Tileset {
     fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
-    fn convert_to_tile_images(
-        &self, palette: &DefaultPalette, palette_index: u8,
+    fn get_tile_images(
+        &self, palette: &PaletteRGB24, palette_index: u8,
     ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>;
     fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage;
 }
 
 impl Tileset for DefaultTileset {
-    fn convert_to_tile_images(
-        &self, palette: &DefaultPalette, palette_index: u8,
+    /// Generates a vector containing images of all tiles in the tileset.
+    fn get_tile_images(
+        &self, palette: &PaletteRGB24, palette_index: u8,
     ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> {
         let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
-        for tile in &self.tiles {
-            let tile_image = RgbaImage::from_fn(8, 8, |x, y| {
-                let color_index = tile[(y * 8 + x) as usize];
-                let color = palette.get_rgb_color(palette_index, color_index);
-                let alpha = if color_index == 0 { 0 } else { 255 };
-
-                Rgba([color[0], color[1], color[2], alpha])
-            });
-            tileset.push(tile_image);
+        for i in 0..self.tiles.len() as u16 {
+            tileset.push(self.get_tile_image(i, palette_index, palette));
         }
         tileset
     }
 
+    /// Gets pixel values for all tiles.
     fn get_pixel_data(&self) -> &Vec<[u8; 64]> {
         &self.tiles
     }
     
+    /// Generates a tile image from the tileset given a palette and palette index.
     fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage{
         image::RgbaImage::from_fn(8,8,|x,y|{
             let pixel_index=((y*8)+x%8) as usize;
@@ -138,8 +134,8 @@ pub mod tests {
         pub Tileset {}
         impl Tileset for Tileset{
             fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
-            fn convert_to_tile_images(
-                &self, palette: &palette::DefaultPalette, palette_index: u8,
+            fn get_tile_images(
+                &self, palette: &palette::PaletteRGB24, palette_index: u8,
             ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>;
             fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage;
         }

@@ -35,6 +35,9 @@ pub struct Tilemap<'a> {
 }
 
 impl<'a> Tilemap<'a> {
+    /// Loads and parses a SNES-nametable and associates it with a tileset and palette. 
+    /// 
+    /// nametable_data should be a LittleEndian nametable, ready for the PPU.
     pub fn load(nametable_data: &'a Vec<u8>, tileset: &'a dyn Tileset, palette: &'a dyn Palette) -> Self {
         Self {
             palette: palette,
@@ -55,6 +58,7 @@ impl<'a> Tilemap<'a> {
         tiles
     }
 
+    /// Generates an image from the tilemap given a width in tiles.
     pub fn generate_image(&mut self, tiles_wide: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         let image_width = 8 * tiles_wide;
         let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;

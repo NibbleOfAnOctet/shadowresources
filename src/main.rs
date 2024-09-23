@@ -5,7 +5,7 @@ mod tiled_map;
 
 use serde::Deserialize;
 use snes_gfx::{
-    palette::{DefaultPalette, Format},
+    palette::{PaletteRGB24, Format},
     tilemap::Tilemap,
     tileset::{DefaultTileset, Tileset},
 };
@@ -34,7 +34,7 @@ fn extract_splash(
     let tileset_data = compression::decompress(rom, tiles_offset);
     let tilemap_data = compression::decompress(rom, map_offset);
 
-    let palette = DefaultPalette::load(&palette_data);
+    let palette = PaletteRGB24::load(&palette_data);
     let tileset = DefaultTileset::load(&tileset_data, format);
     let mut tilemap = Tilemap::load(&tilemap_data, &tileset, &palette);
 
@@ -46,7 +46,7 @@ fn extract_splash(
         .save(format!("{}tilemap.png", &base_dir))
         .unwrap();
 
-    let all_tiles = tileset.convert_to_tile_images(&palette, palette_index);
+    let all_tiles = tileset.get_tile_images(&palette, palette_index);
     DefaultTileset::merge_tiles(&all_tiles, 16)
         .save(format!("{}tileset.png", &base_dir))
         .unwrap();
