@@ -1,7 +1,7 @@
 # SNES-GFX
 
 ## A tool for extracting graphics and tilemaps from SNES games.
-The tool uses data in the original LittleEndian SNES formats. The tool can handle 2BPP and 4BPP tile data. It can also use the tile data together with palette data to reconstruct a tilemap image. The crate is under construction and stuff will definitely break between versions.
+The tool uses data in the original LittleEndian SNES formats. The tool can handle 2BPP and 4BPP tile data. It can also use the tile data together with palette data to reconstruct a tilemap image. The crate is under construction and stuff will definitely break between versions. The library is coded as a learning experience, and will probably not follow best-practices.
 
 ## Usage example
 `
