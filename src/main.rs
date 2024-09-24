@@ -3,54 +3,14 @@
 mod compression;
 mod tiled_map;
 
+use bitstream_io::{ByteRead, ByteReader, LittleEndian};
 use serde::Deserialize;
 use snes_gfx::{
-    palette::{PaletteRGB24, Format},
+    palette::{Format, Palette},
     tilemap::Tilemap,
-    tileset::{DefaultTileset, Tileset},
+    tileset::{Tileset, TilesetIterators},
 };
-use std::{
-    fs::{self, File},
-    io::Seek,
-};
-
-use byteorder::ReadBytesExt;
-
-fn read_bytes(rom: &mut File, offset: u32, num_bytes: u32) -> Vec<u8> {
-    rom.seek(std::io::SeekFrom::Start(offset.into())).unwrap();
-    let mut colors = Vec::<u8>::new();
-    for _ in 0..num_bytes {
-        colors.push(rom.read_u8().unwrap());
-    }
-
-    colors
-}
-
-fn extract_splash(
-    prefix: &str, rom: &mut File, palette_offset: u32, palette_length: u32, palette_index: u8, map_offset: u32,
-    tiles_offset: u32, format: Format,
-) {
-    let palette_data = read_bytes(rom, palette_offset, palette_length);
-    let tileset_data = compression::decompress(rom, tiles_offset);
-    let tilemap_data = compression::decompress(rom, map_offset);
-
-    let palette = PaletteRGB24::load(&palette_data);
-    let tileset = DefaultTileset::load(&tileset_data, format);
-    let mut tilemap = Tilemap::load(&tilemap_data, &tileset, &palette);
-
-    let base_dir = format!("decompressed/{prefix}");
-    fs::create_dir(&base_dir).unwrap_or_default();
-
-    tilemap
-        .generate_image(32)
-        .save(format!("{}tilemap.png", &base_dir))
-        .unwrap();
-
-    let all_tiles = tileset.get_tile_images(&palette, palette_index);
-    DefaultTileset::merge_tiles(&all_tiles, 16)
-        .save(format!("{}tileset.png", &base_dir))
-        .unwrap();
-}
+use std::{fs::File, io::Seek};
 
 #[derive(Deserialize)]
 enum TileFormat {
@@ -74,21 +34,31 @@ struct SplashData {
 
 fn main() {
     let mut rom = File::open("shadowrun.sfc").expect("Could not open ROM-file!");
-    let splash_data: SplashData =
-        serde_json::from_str(fs::read_to_string("decompressed/splash1.json").unwrap().as_str()).unwrap();
-    for (index, layer) in splash_data.layers.iter().enumerate() {
-        extract_splash(
-            &format!("splash1/layer{}/", index),
-            &mut rom,
-            splash_data.palette_offset,
-            splash_data.num_colors * 2,
-            layer.palette_index,
-            layer.map_offset,
-            layer.tile_data,
-            match layer.bpp {
-                TileFormat::BPP2 => Format::BPP2,
-                TileFormat::BPP4 => Format::BPP4,
-            },
-        );
-    }
+    let tileset_data = compression::decompress(&mut rom, 327985);
+    let tilemap_data = compression::decompress(&mut rom, 329628);
+    let palette_data_offset = 327729;
+    let num_colors = 32;
+
+    rom.seek(std::io::SeekFrom::Start(palette_data_offset as u64)).unwrap();
+    let mut reader = ByteReader::endian(rom, LittleEndian);
+    let palette_data = reader.read_to_vec(num_colors * 2 as usize).unwrap();
+
+    // Load necessary data from little endian byte data.
+    let palette = Palette::load(&palette_data);
+    let tileset = Tileset::load(&tileset_data, Format::BPP4);
+    let mut tilemap = Tilemap::load(&tilemap_data);
+
+    // Generate tilemap
+    tilemap
+        .generate_image(32, &tileset, &palette)
+        .save("tilemap.png")
+        .expect("Could not save tilemap image!");
+
+    // Create an iterator over tileset images
+    let images = tileset.image_iter(1, &palette);
+
+    // Merge into tileset 16 tiles wide
+    Tileset::merge_tiles(&images.collect(), 16)
+        .save("tileset.png")
+        .expect("Could not save tileset image!");
 }

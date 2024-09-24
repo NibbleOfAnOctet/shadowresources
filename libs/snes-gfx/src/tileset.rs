@@ -1,56 +1,76 @@
+use crate::palette::{Format, Palette, PaletteTrait};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
+use std::{
+    io::{BufReader, Cursor, Read},
+    ops::Index,
+};
 
-use crate::palette::{PaletteRGB24, Format, Palette};
-use std::io::{BufReader, Cursor, Read};
+#[cfg_attr(test, mockall::automock)]
+pub trait TilesetTrait {
+    fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
+    fn get_tile_image(&self, index: u16, palette_index: u8, palette: &dyn PaletteTrait) -> RgbaImage;
+}
+pub trait TilesetIterators {
+    fn image_iter(&self, palette_index: u8, palette: &Palette) -> impl Iterator<Item = RgbaImage>;
+    fn pixeldata_iter(&self) -> impl Iterator<Item = &[u8; 64]>;
+}
 
-pub struct DefaultTileset {
+pub struct Tileset {
     tiles: Vec<[u8; 64]>,
     format: Format,
 }
 
-pub trait Tileset {
-    fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
-    fn get_tile_images(
-        &self, palette: &PaletteRGB24, palette_index: u8,
-    ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>;
-    fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage;
+impl Index<usize> for Tileset {
+    type Output = [u8; 64];
+
+    /// Gets the pixel data of the tile at provided index.
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.tiles[index]
+    }
 }
 
-impl Tileset for DefaultTileset {
-    /// Generates a vector containing images of all tiles in the tileset.
-    fn get_tile_images(
-        &self, palette: &PaletteRGB24, palette_index: u8,
-    ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> {
-        let mut tileset: Vec<ImageBuffer<Rgba<u8>, Vec<u8>>> = Vec::new();
-        for i in 0..self.tiles.len() as u16 {
-            tileset.push(self.get_tile_image(i, palette_index, palette));
-        }
-        tileset
-    }
-
+impl TilesetTrait for Tileset {
     /// Gets pixel values for all tiles.
     fn get_pixel_data(&self) -> &Vec<[u8; 64]> {
         &self.tiles
     }
-    
+
     /// Generates a tile image from the tileset given a palette and palette index.
-    fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage{
-        image::RgbaImage::from_fn(8,8,|x,y|{
-            let pixel_index=((y*8)+x%8) as usize;
+    fn get_tile_image(&self, index: u16, palette_index: u8, palette: &dyn PaletteTrait) -> RgbaImage {
+        image::RgbaImage::from_fn(8, 8, |x, y| {
+            let pixel_index = ((y * 8) + x % 8) as usize;
             let color_index = self.tiles[index as usize][pixel_index];
             let color = palette.get_rgb_color(palette_index, color_index);
-            let alpha = if color_index==0 {0}else{255};
+            let alpha = if color_index == 0 { 0 } else { 255 };
             Rgba([color[0], color[1], color[2], alpha])
         })
     }
 }
 
-impl DefaultTileset {
-    pub fn load(tileset_data: &Vec<u8>, format: Format) -> Self {
+impl TilesetIterators for Tileset {
+    fn image_iter(&self, palette_index: u8, palette: &Palette) -> impl Iterator<Item = RgbaImage> {
+        self.tiles.iter().map(move |tile| {
+            image::RgbaImage::from_fn(8, 8, |x, y| {
+                let pixel_index = ((y * 8) + x % 8) as usize;
+                let color_index = tile[pixel_index];
+                let color = palette.get_rgb_color(palette_index, color_index);
+                let alpha = if color_index == 0 { 0 } else { 255 };
+                Rgba([color[0], color[1], color[2], alpha])
+            })
+        })
+    }
+
+    fn pixeldata_iter(&self) -> impl Iterator<Item = &[u8; 64]> {
+        self.tiles.iter()
+    }
+}
+
+impl Tileset {
+    pub fn load(tileset_data: &[u8], format: Format) -> Self {
         Self {
             tiles: match format {
-                Format::BPP2 => DefaultTileset::convert_tiles::<16>(tileset_data),
-                Format::BPP4 => DefaultTileset::convert_tiles::<32>(tileset_data),
+                Format::BPP2 => Tileset::convert_tiles::<16>(tileset_data),
+                Format::BPP4 => Tileset::convert_tiles::<32>(tileset_data),
             },
             format,
         }
@@ -68,7 +88,6 @@ impl DefaultTileset {
         tileset_image
     }
 
-    
     /// Converts the SNES 8x8 planar format to an array of u8 values containing the pixel data. (Indexed color)
     fn bitplanes_to_tile<const BYTES_PER_TILE: usize>(tile_data: &[u8]) -> [u8; 64] {
         // Final 8x8 pixel values
@@ -103,7 +122,7 @@ impl DefaultTileset {
 
     /// Converts the bitplane tile data to 8x8 pixel values.
     /// BYTES_PER_TILE: 32 (4BPP) or 16 (2BPP)
-    fn convert_tiles<const BYTES_PER_TILE: usize>(tile_data: &Vec<u8>) -> Vec<[u8; 64]> {
+    fn convert_tiles<const BYTES_PER_TILE: usize>(tile_data: &[u8]) -> Vec<[u8; 64]> {
         let cursor = Cursor::new(tile_data);
         let mut reader = BufReader::new(cursor);
         let mut tiles: Vec<[u8; 64]> = Vec::new();
@@ -112,7 +131,7 @@ impl DefaultTileset {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(_) => {
-                    let tile = DefaultTileset::bitplanes_to_tile::<BYTES_PER_TILE>(&buf);
+                    let tile = Tileset::bitplanes_to_tile::<BYTES_PER_TILE>(&buf);
                     tiles.push(tile);
                 }
                 Err(e) => panic!("{}", e),
@@ -124,23 +143,10 @@ impl DefaultTileset {
 
 #[cfg(test)]
 pub mod tests {
-    use mockall::mock;
-
-    use crate::palette::{self, tests::MockPalette};
+    use crate::palette::MockPaletteTrait;
 
     use super::*;
 
-    mock! {
-        pub Tileset {}
-        impl Tileset for Tileset{
-            fn get_pixel_data(&self) -> &Vec<[u8; 64]>;
-            fn get_tile_images(
-                &self, palette: &palette::PaletteRGB24, palette_index: u8,
-            ) -> Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>;
-            fn get_tile_image(&self, index:u16, palette_index:u8, palette:&dyn Palette)->RgbaImage;
-        }
-    }
-    
     #[test]
     fn tileset_generates_correct_pixel_data_for_bpp2() {
         let tileset_data: Vec<u8> = vec![
@@ -154,7 +160,7 @@ pub mod tests {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ] as [u8; 64]];
 
-        let tileset = DefaultTileset::load(&tileset_data, Format::BPP2);
+        let tileset = Tileset::load(&tileset_data, Format::BPP2);
         assert_eq!(tileset.get_pixel_data(), &expected);
     }
 
@@ -163,18 +169,18 @@ pub mod tests {
         let tileset_data: Vec<u8> = vec![
             0x00, 0x00, 0x24, 0x00, 0x24, 0x00, 0x00, 0x00, 0x42, 0x00, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        let mut palette = MockPalette::new();
-        let mut i=0;
-        palette.expect_get_rgb_color().returning(move |_a,_b|{
-            let color = [i,i,i];
-            i+=1;
+        let mut palette = MockPaletteTrait::new();
+        let mut i = 0;
+        palette.expect_get_rgb_color().returning(move |_a, _b| {
+            let color = [i, i, i];
+            i += 1;
             color
         });
 
-        let tileset = DefaultTileset::load(&tileset_data, Format::BPP2);
+        let tileset = Tileset::load(&tileset_data, Format::BPP2);
         let tile_image = tileset.get_tile_image(0, 0, &palette);
-        
-        for (index,pixel) in tile_image.pixels().enumerate(){
+
+        for (index, pixel) in tile_image.pixels().enumerate() {
             assert_eq!(pixel.0[0], index as u8);
         }
     }
@@ -193,7 +199,7 @@ pub mod tests {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ] as [u8; 64]];
 
-        let tileset = DefaultTileset::load(&tileset_data, Format::BPP4);
+        let tileset = Tileset::load(&tileset_data, Format::BPP4);
         assert_eq!(tileset.get_pixel_data(), &expected);
     }
 }

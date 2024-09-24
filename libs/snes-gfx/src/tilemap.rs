@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::{io::Cursor, ops::Index};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use image::{
@@ -6,7 +6,11 @@ use image::{
     GenericImage, ImageBuffer, Rgba,
 };
 
-use crate::{palette::Palette, tileset::Tileset};
+use crate::{palette::PaletteTrait, tileset::TilesetTrait};
+
+pub struct Tilemap {
+    tiles: Vec<Tile>,
+}
 
 pub struct Tile {
     flip_h: bool,
@@ -28,25 +32,24 @@ impl Tile {
     }
 }
 
-pub struct Tilemap<'a> {
-    palette: &'a dyn Palette,
-    tileset: &'a dyn Tileset,
-    tiles: Vec<Tile>,
+impl Index<usize> for Tilemap {
+    type Output = Tile;
+
+    /// Gets the tile data from the tile at the specified index.
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.tiles[index]
+    }
 }
 
-impl<'a> Tilemap<'a> {
-    /// Loads and parses a SNES-nametable and associates it with a tileset and palette. 
-    /// 
-    /// nametable_data should be a LittleEndian nametable, ready for the PPU.
-    pub fn load(nametable_data: &'a Vec<u8>, tileset: &'a dyn Tileset, palette: &'a dyn Palette) -> Self {
+impl Tilemap {
+    /// Loads and parses a SNES-nametable from little-endian byte data. It also associates it with a tileset and palette.
+    pub fn load(nametable_data: &[u8]) -> Self {
         Self {
-            palette: palette,
-            tileset: tileset,
             tiles: Tilemap::parse_nametable(nametable_data),
         }
     }
 
-    fn parse_nametable(nametable_data: &'a Vec<u8>) -> Vec<Tile> {
+    fn parse_nametable(nametable_data: &[u8]) -> Vec<Tile> {
         let mut tiles = Vec::<Tile>::new();
         let mut cursor = Cursor::new(nametable_data);
         loop {
@@ -59,15 +62,15 @@ impl<'a> Tilemap<'a> {
     }
 
     /// Generates an image from the tilemap given a width in tiles.
-    pub fn generate_image(&mut self, tiles_wide: u32) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    pub fn generate_image(
+        &mut self, tiles_wide: u32, tileset: &impl TilesetTrait, palette: &impl PaletteTrait,
+    ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         let image_width = 8 * tiles_wide;
         let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;
         let mut target_image = image::RgbaImage::new(image_width, image_height);
 
         for (index, tile) in self.tiles.iter().enumerate() {
-            let mut tile_image = self
-                .tileset
-                .get_tile_image(tile.tile_index, tile.palette_index, self.palette);
+            let mut tile_image = tileset.get_tile_image(tile.tile_index, tile.palette_index, palette);
 
             if tile.flip_h {
                 tile_image = flip_horizontal(&tile_image);
@@ -90,54 +93,42 @@ impl<'a> Tilemap<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{palette::tests::MockPalette, tileset::tests::MockTileset};
-
     use super::*;
-    
+
     #[test]
     fn tilemap_returns_correct_tile_index() {
-        let tileset = MockTileset::new();
-        let palette = MockPalette::new();
-        let nametable_data:Vec<u8> = vec!(0x01,0x00,0x02,0x00,0x03,0x00);
-        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
-        assert_eq!(tilemap.tiles[0].tile_index,0x01);
-        assert_eq!(tilemap.tiles[1].tile_index,0x02);
-        assert_eq!(tilemap.tiles[2].tile_index,0x03);
+        let nametable_data = [0x01, 0x00, 0x02, 0x00, 0x03, 0x00];
+        let tilemap = Tilemap::load(&nametable_data);
+        assert_eq!(tilemap.tiles[0].tile_index, 0x01);
+        assert_eq!(tilemap.tiles[1].tile_index, 0x02);
+        assert_eq!(tilemap.tiles[2].tile_index, 0x03);
     }
 
     #[test]
     fn tilemap_returns_correct_tile_palette_index() {
-        let tileset = MockTileset::new();
-        let palette = MockPalette::new();
-        let nametable_data:Vec<u8> = vec!(0x00,0x1C);
-        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
-        assert_eq!(tilemap.tiles[0].palette_index,7);
+        let nametable_data = [0x00, 0x1C];
+        let tilemap = Tilemap::load(&nametable_data);
+        assert_eq!(tilemap.tiles[0].palette_index, 7);
     }
 
     #[test]
     fn tilemap_returns_correct_tile_priority() {
-        let tileset = MockTileset::new();
-        let palette = MockPalette::new();
-        let nametable_data:Vec<u8> = vec!(0x00,0x20);
-        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
-        assert_eq!(tilemap.tiles[0].priority,true);
+        let nametable_data = [0x00, 0x20];
+        let tilemap = Tilemap::load(&nametable_data);
+        assert_eq!(tilemap.tiles[0].priority, true);
     }
 
     #[test]
     fn tilemap_returns_correct_tile_flip_v() {
-        let tileset = MockTileset::new();
-        let palette = MockPalette::new();
-        let nametable_data:Vec<u8> = vec!(0x00,0x80);
-        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
-        assert_eq!(tilemap.tiles[0].flip_v,true);
+        let nametable_data = [0x00, 0x80];
+        let tilemap = Tilemap::load(&nametable_data);
+        assert_eq!(tilemap.tiles[0].flip_v, true);
     }
 
     #[test]
     fn tilemap_returns_correct_tile_flip_h() {
-        let tileset = MockTileset::new();
-        let palette = MockPalette::new();
-        let nametable_data:Vec<u8> = vec!(0x00,0x40);
-        let tilemap = Tilemap::load(&nametable_data, &tileset, &palette);
-        assert_eq!(tilemap.tiles[0].flip_h,true);
+        let nametable_data = [0x00, 0x40];
+        let tilemap = Tilemap::load(&nametable_data);
+        assert_eq!(tilemap.tiles[0].flip_h, true);
     }
 }
