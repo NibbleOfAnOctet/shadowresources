@@ -4,11 +4,13 @@ mod compression;
 mod tiled_map;
 
 use bitstream_io::{ByteRead, ByteReader, LittleEndian};
+
 use serde::Deserialize;
+use image::imageops::{flip_horizontal, flip_vertical};
 use snes_gfx::{
     palette::{Format, Palette},
     tilemap::Tilemap,
-    tileset::{Tileset, TilesetIterators},
+    tileset::{Tileset, TilesetIterators, TilesetTrait},
 };
 use std::{fs::File, io::Seek};
 
@@ -53,6 +55,17 @@ fn main() {
         .generate_image(32, &tileset, &palette)
         .save("tilemap.png")
         .expect("Could not save tilemap image!");
+
+    // Iterate over nametable and generate tile images for each entry.
+    for tile_data in tilemap.tile_iter() {
+        let mut tile_image = tileset.get_tile_image(tile_data.tile_index, tile_data.palette_index, &palette);
+        if tile_data.flip_h{
+            flip_horizontal(&tile_image);
+        }
+        if tile_data.flip_v{
+            flip_vertical(&tile_image);
+        }
+    }
 
     // Create an iterator over tileset images
     let images = tileset.image_iter(1, &palette);

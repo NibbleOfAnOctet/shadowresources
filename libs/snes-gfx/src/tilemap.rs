@@ -13,11 +13,11 @@ pub struct Tilemap {
 }
 
 pub struct Tile {
-    flip_h: bool,
-    flip_v: bool,
-    priority: bool,
-    palette_index: u8,
-    tile_index: u16,
+    pub flip_h: bool,
+    pub flip_v: bool,
+    pub priority: bool,
+    pub palette_index: u8,
+    pub tile_index: u16,
 }
 
 impl Tile {
@@ -41,6 +41,7 @@ impl Index<usize> for Tilemap {
     }
 }
 
+
 impl Tilemap {
     /// Loads and parses a SNES-nametable from little-endian byte data. It also associates it with a tileset and palette.
     pub fn load(nametable_data: &[u8]) -> Self {
@@ -49,16 +50,8 @@ impl Tilemap {
         }
     }
 
-    fn parse_nametable(nametable_data: &[u8]) -> Vec<Tile> {
-        let mut tiles = Vec::<Tile>::new();
-        let mut cursor = Cursor::new(nametable_data);
-        loop {
-            match cursor.read_u16::<LittleEndian>() {
-                Ok(entry) => tiles.push(Tile::from_nametable_entry(entry)),
-                Err(_) => break,
-            }
-        }
-        tiles
+    pub fn tile_iter(&self) -> impl Iterator<Item = &Tile>{
+        self.tiles.iter()
     }
 
     /// Generates an image from the tilemap given a width in tiles.
@@ -88,6 +81,18 @@ impl Tilemap {
         }
 
         target_image
+    }
+
+    fn parse_nametable(nametable_data: &[u8]) -> Vec<Tile> {
+        let mut tiles = Vec::<Tile>::new();
+        let mut cursor = Cursor::new(nametable_data);
+        loop {
+            match cursor.read_u16::<LittleEndian>() {
+                Ok(entry) => tiles.push(Tile::from_nametable_entry(entry)),
+                Err(_) => break,
+            }
+        }
+        tiles
     }
 }
 
