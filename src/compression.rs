@@ -1,7 +1,4 @@
-use std::{
-    fs::File,
-    io::{Cursor, Read, Seek},
-};
+use std::io::Cursor;
 
 use bitstream_io::{BigEndian, BitRead, BitReader};
 
@@ -37,16 +34,10 @@ impl<R: std::io::Read, E: bitstream_io::Endianness> UIE for BitReader<R, E> {
 
 /// Decompression algorithm
 /// Ported from https://github.com/Osteoclave/game-tools/blob/main/snes/shadowrun_decomp.py
-pub fn decompress(rom_file: &mut File, offset: u32) -> Vec<u8> {
-    rom_file
-        .seek(std::io::SeekFrom::Start(offset.into()))
-        .expect("Could not seek offset to compressed tiles!");
-    let mut rom_bytes: Vec<u8> = Vec::new();
-    rom_file
-        .read_to_end(&mut rom_bytes)
-        .expect("Could not read compressed tiles!");
+pub fn decompress(compressed_data_bytes: &[u8]) -> Vec<u8> {
+    
     // Create a cursor for reading from the buffer
-    let cursor = Cursor::new(rom_bytes);
+    let cursor = Cursor::new(compressed_data_bytes);
     // Set up the bit reader for control bits
     let mut in_stream = BitReader::endian(cursor, BigEndian);
 

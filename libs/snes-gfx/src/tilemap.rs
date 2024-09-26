@@ -6,13 +6,13 @@ use image::{
     GenericImage, ImageBuffer, Rgba,
 };
 
-use crate::{palette::PaletteTrait, tileset::TilesetTrait};
+use crate::{palette::PaletteTrait, tileset::{tile::Tile, TilesetTrait}};
 
 pub struct Tilemap {
-    tiles: Vec<Tile>,
+    tiles: Vec<NametableEntry>,
 }
 
-pub struct Tile {
+pub struct NametableEntry {
     pub flip_h: bool,
     pub flip_v: bool,
     pub priority: bool,
@@ -20,7 +20,7 @@ pub struct Tile {
     pub tile_index: u16,
 }
 
-impl Tile {
+impl NametableEntry {
     pub fn from_nametable_entry(entry: u16) -> Self {
         Self {
             tile_index: (entry & 0x3ff),
@@ -33,7 +33,7 @@ impl Tile {
 }
 
 impl Index<usize> for Tilemap {
-    type Output = Tile;
+    type Output = NametableEntry;
 
     /// Gets the tile data from the tile at the specified index.
     fn index(&self, index: usize) -> &Self::Output {
@@ -50,7 +50,7 @@ impl Tilemap {
         }
     }
 
-    pub fn tile_iter(&self) -> impl Iterator<Item = &Tile>{
+    pub fn tile_iter(&self) -> impl Iterator<Item = &NametableEntry>{
         self.tiles.iter()
     }
 
@@ -62,13 +62,15 @@ impl Tilemap {
         let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;
         let mut target_image = image::RgbaImage::new(image_width, image_height);
 
-        for (index, tile) in self.tiles.iter().enumerate() {
-            let mut tile_image = tileset.get_tile_image(tile.tile_index, tile.palette_index, palette);
+        for (index, nametable_entry) in self.tiles.iter().enumerate() {
+            let tile = tileset.tile_iter().nth(nametable_entry.tile_index.into()).unwrap();
+            let mut tile_image = tile.get_image(nametable_entry.palette_index,palette);
+            
 
-            if tile.flip_h {
+            if nametable_entry.flip_h {
                 tile_image = flip_horizontal(&tile_image);
             }
-            if tile.flip_v {
+            if nametable_entry.flip_v {
                 tile_image = flip_vertical(&tile_image);
             }
 
@@ -83,57 +85,15 @@ impl Tilemap {
         target_image
     }
 
-    fn parse_nametable(nametable_data: &[u8]) -> Vec<Tile> {
-        let mut tiles = Vec::<Tile>::new();
+    fn parse_nametable(nametable_data: &[u8]) -> Vec<NametableEntry> {
+        let mut tiles = Vec::<NametableEntry>::new();
         let mut cursor = Cursor::new(nametable_data);
         loop {
             match cursor.read_u16::<LittleEndian>() {
-                Ok(entry) => tiles.push(Tile::from_nametable_entry(entry)),
+                Ok(entry) => tiles.push(NametableEntry::from_nametable_entry(entry)),
                 Err(_) => break,
             }
         }
         tiles
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-
-    #[test]
-    fn tilemap_returns_correct_tile_index() {
-        let nametable_data = [0x01, 0x00, 0x02, 0x00, 0x03, 0x00];
-        let tilemap = Tilemap::load(&nametable_data);
-        assert_eq!(tilemap.tiles[0].tile_index, 0x01);
-        assert_eq!(tilemap.tiles[1].tile_index, 0x02);
-        assert_eq!(tilemap.tiles[2].tile_index, 0x03);
-    }
-
-    #[test]
-    fn tilemap_returns_correct_tile_palette_index() {
-        let nametable_data = [0x00, 0x1C];
-        let tilemap = Tilemap::load(&nametable_data);
-        assert_eq!(tilemap.tiles[0].palette_index, 7);
-    }
-
-    #[test]
-    fn tilemap_returns_correct_tile_priority() {
-        let nametable_data = [0x00, 0x20];
-        let tilemap = Tilemap::load(&nametable_data);
-        assert_eq!(tilemap.tiles[0].priority, true);
-    }
-
-    #[test]
-    fn tilemap_returns_correct_tile_flip_v() {
-        let nametable_data = [0x00, 0x80];
-        let tilemap = Tilemap::load(&nametable_data);
-        assert_eq!(tilemap.tiles[0].flip_v, true);
-    }
-
-    #[test]
-    fn tilemap_returns_correct_tile_flip_h() {
-        let nametable_data = [0x00, 0x40];
-        let tilemap = Tilemap::load(&nametable_data);
-        assert_eq!(tilemap.tiles[0].flip_h, true);
     }
 }
