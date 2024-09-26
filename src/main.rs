@@ -9,7 +9,7 @@ use serde::Deserialize;
 use snes_gfx::{
     palette::{Format, Palette},
     tilemap::Tilemap,
-    tileset::{Tileset, TilesetTrait},
+    tileset::Tileset,
 };
 use std::{
     fs::{self, File},
@@ -38,10 +38,9 @@ struct SplashData {
     num_colors: u32,
 }
 
-fn extract(rom_path: &str, metadata: &SplashData) {
-    let mut rom = File::open(rom_path).expect("Could not open ROM-file!");
+fn extract(rom_file: &str, metadata: &SplashData) {
+    let mut rom = File::open(rom_file).expect("Could not open rom.");
     for (layer_index, layer) in metadata.layers.iter().enumerate() {
-        
         rom.seek(std::io::SeekFrom::Start(layer.tile_data as u64)).unwrap();
         let mut compressed_tileset = Vec::<u8>::new();
         rom.read_to_end(&mut compressed_tileset).unwrap();
@@ -62,9 +61,9 @@ fn extract(rom_path: &str, metadata: &SplashData) {
         };
 
         // Load necessary data from little endian byte data.
-        let palette = Palette::load(&palette_data);
-        let tileset = Tileset::load(&tileset_data, format);
-        let mut tilemap = Tilemap::load(&tilemap_data);
+        let palette = Palette::new(&palette_data);
+        let tileset = Tileset::new(&tileset_data, format);
+        let mut tilemap = Tilemap::new(&tilemap_data);
         let basepath = Path::new("./extracted/").join(metadata.directory.as_str());
         fs::create_dir_all(&basepath).unwrap_or_default();
 
@@ -91,34 +90,7 @@ fn main() {
     let splash2_metadata =
         serde_json::from_str::<SplashData>(fs::read_to_string("extracted/splash2.json").unwrap().as_str())
             .expect("Could not read splash 1 metadata!");
+
     extract("shadowrun.sfc", &splash1_metadata);
     extract("shadowrun.sfc", &splash2_metadata);
-/*
-    let tileset_data = compression::decompress(&mut rom, 322926);
-    let tilemap_data = compression::decompress(&mut rom, 325635);
-    let palette_data_offset = 322766;
-    let num_colors = 160;
-
-    rom.seek(std::io::SeekFrom::Start(palette_data_offset as u64)).unwrap();
-    let mut reader = ByteReader::endian(rom, LittleEndian);
-    let palette_data = reader.read_to_vec(num_colors * 2 as usize).unwrap();
-
-    // Load necessary data from little endian byte data.
-    let palette = Palette::load(&palette_data);
-    let tileset = Tileset::load(&tileset_data, Format::BPP4);
-    let mut tilemap = Tilemap::load(&tilemap_data);
-    let basepath = Path::new("./extracted/");
-    // Generate tilemap
-    tilemap
-        .generate_image(32, &tileset, &palette)
-        .save(basepath.join("tilemap.png"))
-        .expect("Could not save tilemap image!");
-
-    // Create an iterator over tileset images
-    let images = tileset.image_iter(1, &palette);
-
-    // Merge into tileset 16 tiles wide
-    Tileset::merge_tiles(&images.collect(), 16)
-        .save(basepath.join("tileset.png"))
-        .expect("Could not save tileset image!"); */
 }

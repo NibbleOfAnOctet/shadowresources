@@ -1,41 +1,35 @@
 pub mod tile;
-use crate::palette::{Format, PaletteTrait};
+use crate::palette::{Format, Palette};
 use image::{GenericImage, ImageBuffer, Rgba, RgbaImage};
 use std::io::{BufReader, Cursor};
-use tile::{Tile, TileEnum};
-
-pub trait TilesetTrait {
-    fn load(tileset_data: &[u8], format: Format) -> Self;
-    fn image_iter(&self, palette_index: u8, palette: &dyn PaletteTrait) -> impl Iterator<Item = RgbaImage>;
-    fn tile_iter(&self) -> impl Iterator<Item = &TileEnum>;
-}
+use tile::Tile;
 
 pub struct Tileset {
-    tiles: Vec<TileEnum>,
+    tiles: Vec<Tile>,
     format: Format,
 }
 
-impl TilesetTrait for Tileset {
-    fn load(tileset_data: &[u8], format: Format) -> Self {
+impl Tileset {
+    pub fn new(tileset_data: &[u8], format: Format) -> Self {
         let mut cursor = Cursor::new(tileset_data);
         let mut reader = BufReader::new(&mut cursor);
         let mut tiles = Vec::new();
         loop {
-            match TileEnum::load(&mut reader, format) {
-                tile::TileLoadResult::Ok(tile) => tiles.push(tile),
-                tile::TileLoadResult::Done => break,
+            match Tile::load(&mut reader, format) {
+                Some(tile) => tiles.push(tile),
+                None => break,
             }
         }
         Self { tiles, format }
     }
 
-    fn image_iter(&self, palette_index: u8, palette: &dyn PaletteTrait) -> impl Iterator<Item = RgbaImage> {
+    pub fn image_iter<'a>(&'a self, palette_index: u8, palette: &'a Palette) -> impl Iterator<Item = RgbaImage>+'a {
         self.tiles
             .iter()
             .map(move |tile| tile.get_image(palette_index, palette))
     }
 
-    fn tile_iter(&self) -> impl Iterator<Item = &TileEnum> {
+    pub fn tile_iter(&self) -> impl Iterator<Item = &Tile> {
         self.tiles.iter()
     }
 }

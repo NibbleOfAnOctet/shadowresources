@@ -6,7 +6,7 @@ use image::{
     GenericImage, ImageBuffer, Rgba,
 };
 
-use crate::{palette::PaletteTrait, tileset::{tile::Tile, TilesetTrait}};
+use crate::{palette::Palette, tileset::Tileset};
 
 pub struct Tilemap {
     tiles: Vec<NametableEntry>,
@@ -44,7 +44,7 @@ impl Index<usize> for Tilemap {
 
 impl Tilemap {
     /// Loads and parses a SNES-nametable from little-endian byte data. It also associates it with a tileset and palette.
-    pub fn load(nametable_data: &[u8]) -> Self {
+    pub fn new(nametable_data: &[u8]) -> Self {
         Self {
             tiles: Tilemap::parse_nametable(nametable_data),
         }
@@ -56,7 +56,7 @@ impl Tilemap {
 
     /// Generates an image from the tilemap given a width in tiles.
     pub fn generate_image(
-        &mut self, tiles_wide: u32, tileset: &impl TilesetTrait, palette: &impl PaletteTrait,
+        &mut self, tiles_wide: u32, tileset: &Tileset, palette: &Palette,
     ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         let image_width = 8 * tiles_wide;
         let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;
@@ -66,7 +66,6 @@ impl Tilemap {
             let tile = tileset.tile_iter().nth(nametable_entry.tile_index.into()).unwrap();
             let mut tile_image = tile.get_image(nametable_entry.palette_index,palette);
             
-
             if nametable_entry.flip_h {
                 tile_image = flip_horizontal(&tile_image);
             }
