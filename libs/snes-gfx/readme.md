@@ -21,18 +21,16 @@ let palette = Palette::new(&palette_data);
 let tileset = Tileset::new(&tileset_data, format);
 let tilemap = Tilemap::new(&tilemap_data);
         
-let basepath = Path::new("./extracted/").join(metadata.directory.as_str());
-fs::create_dir_all(&basepath).unwrap_or_default();
 // Generate tilemap
 tilemap
     .generate_image(32, &tileset, &palette)
-    .save(basepath.join(format!("layer{}_tilemap.png", layer_index)))
+    .save("tilemap.png")
     .expect("Could not save tilemap image!");
 // Create an iterator over tileset images
-let images = tileset.image_iter(layer.palette_index, &palette);
+let images = tileset.image_iter(1, &palette);
 
 // Merge into tileset 16 tiles wide
 Tileset::merge_tiles(&images.collect(), 16)
-    .save(basepath.join(format!("layer{}_tileset.png", layer_index)))
+    .save("tileset.png")
     .expect("Could not save tileset image!");
 ```
