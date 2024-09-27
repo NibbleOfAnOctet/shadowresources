@@ -17,32 +17,22 @@ use snes_gfx::{
 [...]
 
 // Load necessary data from little endian byte data.
-let palette = Palette::load(&palette_data);
-let tileset = Tileset::load(&tileset_data, Format::BPP4);
-let mut tilemap = Tilemap::load(&tilemap_data);
-
+let palette = Palette::new(&palette_data);
+let tileset = Tileset::new(&tileset_data, format);
+let tilemap = Tilemap::new(&tilemap_data);
+        
+let basepath = Path::new("./extracted/").join(metadata.directory.as_str());
+fs::create_dir_all(&basepath).unwrap_or_default();
 // Generate tilemap
 tilemap
     .generate_image(32, &tileset, &palette)
-    .save("tilemap.png")
+    .save(basepath.join(format!("layer{}_tilemap.png", layer_index)))
     .expect("Could not save tilemap image!");
-
-// Iterate over nametable and generate tile images for each entry.
-for tile_data in tilemap.tile_iter() {
-    let mut tile_image = tileset.get_tile_image(tile_data.tile_index, tile_data.palette_index, &palette);
-    if tile_data.flip_h{
-        flip_horizontal(&tile_image);
-    }
-    if tile_data.flip_v{
-        flip_vertical(&tile_image);
-    }
-}
-
 // Create an iterator over tileset images
-let images = tileset.image_iter(1, &palette);
+    let images = tileset.image_iter(layer.palette_index, &palette);
 
-// Merge into tileset 16 tiles wide
-Tileset::merge_tiles(&images.collect(), 16)
-    .save("tileset.png")
-    .expect("Could not save tileset image!");
+    // Merge into tileset 16 tiles wide
+    Tileset::merge_tiles(&images.collect(), 16)
+        .save(basepath.join(format!("layer{}_tileset.png", layer_index)))
+        .expect("Could not save tileset image!");
 ```

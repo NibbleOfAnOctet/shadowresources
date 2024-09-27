@@ -56,7 +56,7 @@ impl Tilemap {
 
     /// Generates an image from the tilemap given a width in tiles.
     pub fn generate_image(
-        &mut self, tiles_wide: u32, tileset: &Tileset, palette: &Palette,
+        &self, tiles_wide: u32, tileset: &Tileset, palette: &Palette,
     ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         let image_width = 8 * tiles_wide;
         let image_height = 8 * (self.tiles.len() as u32 / tiles_wide) + 8;

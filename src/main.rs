@@ -32,7 +32,7 @@ struct Layer {
 }
 #[derive(Deserialize)]
 struct SplashData {
-    directory:String,
+    directory: String,
     layers: Vec<Layer>,
     palette_offset: u32,
     num_colors: u32,
@@ -51,7 +51,8 @@ fn extract(rom_file: &str, metadata: &SplashData) {
         rom.read_to_end(&mut compressed_tilemap).unwrap();
         let tilemap_data = compression::decompress(&compressed_tilemap);
 
-        rom.seek(std::io::SeekFrom::Start(metadata.palette_offset as u64)).unwrap();
+        rom.seek(std::io::SeekFrom::Start(metadata.palette_offset as u64))
+            .unwrap();
 
         let mut reader = ByteReader::endian(&rom, LittleEndian);
         let palette_data = reader.read_to_vec(metadata.num_colors as usize * 2).unwrap();
@@ -63,14 +64,15 @@ fn extract(rom_file: &str, metadata: &SplashData) {
         // Load necessary data from little endian byte data.
         let palette = Palette::new(&palette_data);
         let tileset = Tileset::new(&tileset_data, format);
-        let mut tilemap = Tilemap::new(&tilemap_data);
+        let tilemap = Tilemap::new(&tilemap_data);
+        
         let basepath = Path::new("./extracted/").join(metadata.directory.as_str());
         fs::create_dir_all(&basepath).unwrap_or_default();
 
         // Generate tilemap
         tilemap
             .generate_image(32, &tileset, &palette)
-            .save(basepath.join(format!("layer{}_tilemap.png",layer_index)))
+            .save(basepath.join(format!("layer{}_tilemap.png", layer_index)))
             .expect("Could not save tilemap image!");
 
         // Create an iterator over tileset images
@@ -78,7 +80,7 @@ fn extract(rom_file: &str, metadata: &SplashData) {
 
         // Merge into tileset 16 tiles wide
         Tileset::merge_tiles(&images.collect(), 16)
-            .save(basepath.join(format!("layer{}_tileset.png",layer_index)))
+            .save(basepath.join(format!("layer{}_tileset.png", layer_index)))
             .expect("Could not save tileset image!");
     }
 }
