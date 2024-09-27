@@ -1,13 +1,13 @@
 # SNES-GFX
 
 ## A tool for converting tiles and tilemaps from SNES games into images.
-The tool uses data in the original LittleEndian SNES formats. The tool can extract 2BPP and 4BPP tiles and tilemaps into RGB images. The crate is under construction and stuff will definitely break between versions. 
+The tool uses data in the original LittleEndian SNES formats. The tool can convert 2BPP, 4BPP and 8BPP tiles as well as and tilemaps into RGB images. The crate is under construction and stuff will definitely break between versions. 
 
 The library is coded as a learning experience, and will probably not follow best-practices.
 
 ## Usage example
 ```rust ignore
-use image::imageops::{flip_horizontal, flip_vertical};
+
 use snes_gfx::{
     palette::{Format, Palette},
     tilemap::Tilemap,
@@ -29,10 +29,10 @@ tilemap
     .save(basepath.join(format!("layer{}_tilemap.png", layer_index)))
     .expect("Could not save tilemap image!");
 // Create an iterator over tileset images
-    let images = tileset.image_iter(layer.palette_index, &palette);
+let images = tileset.image_iter(layer.palette_index, &palette);
 
-    // Merge into tileset 16 tiles wide
-    Tileset::merge_tiles(&images.collect(), 16)
-        .save(basepath.join(format!("layer{}_tileset.png", layer_index)))
-        .expect("Could not save tileset image!");
+// Merge into tileset 16 tiles wide
+Tileset::merge_tiles(&images.collect(), 16)
+    .save(basepath.join(format!("layer{}_tileset.png", layer_index)))
+    .expect("Could not save tileset image!");
 ```
